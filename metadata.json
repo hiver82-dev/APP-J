@@ -1,0 +1,6 @@
+{
+  "name": "청년 진로 NCS 직무추천",
+  "description": "국민취업지원제도 청년 진로상담 및 NCS 직무 추천 서비스",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
