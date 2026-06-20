@@ -379,12 +379,59 @@ export default function App() {
         }),
       });
 
+      const contentType = response.headers.get("content-type") || "";
+      const isJson = contentType.includes("application/json");
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || "분석 서버와 통신 도중 실패했습니다.");
+        let errorMsg = `AI 추천 통신 실패 (상태 코드: ${response.status})`;
+        if (isJson) {
+          try {
+            const errorData = await response.json();
+            errorMsg = errorData.error || errorData.details || errorMsg;
+            if (errorData.details && typeof errorData.details === "string") {
+              errorMsg += ` (상세: ${errorData.details})`;
+            }
+          } catch (e) {
+            // parsing error fallback
+          }
+        } else {
+          const textMsg = await response.text();
+          errorMsg = `AI 호출 실패 (상태 ${response.status}): ${textMsg.slice(0, 300)}`;
+        }
+        throw new Error(errorMsg);
       }
 
-      const recommendationData: NCSRecommendationResult = await response.json();
+      if (!isJson) {
+        const textMsg = await response.text();
+        throw new Error(`분석 서버의 응답 형식이 올바르지 않습니다 (JSON 아님). 응답 원본 (상태 200): ${textMsg.slice(0, 300)}`);
+      }
+
+      const rawText = await response.text();
+      let recommendationData: NCSRecommendationResult;
+      try {
+        const extractJson = (text: string): string => {
+          let cleaned = text.trim();
+          if (cleaned.startsWith("```")) {
+            cleaned = cleaned.replace(/^```(?:json)?/i, "");
+          }
+          if (cleaned.endsWith("```")) {
+            cleaned = cleaned.replace(/```$/, "");
+          }
+          cleaned = cleaned.trim();
+          const startIdx = cleaned.indexOf("{");
+          const endIdx = cleaned.lastIndexOf("}");
+          if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+            cleaned = cleaned.substring(startIdx, endIdx + 1);
+          }
+          return cleaned;
+        };
+
+        const cleanedJson = extractJson(rawText);
+        recommendationData = JSON.parse(cleanedJson);
+      } catch (parseErr: any) {
+        throw new Error(`AI 응답 JSON 파싱 실패: ${parseErr.message}. 응답 원본: ${rawText.slice(0, 300)}`);
+      }
+
       setResult(recommendationData);
     } catch (err: any) {
       console.error(err);
